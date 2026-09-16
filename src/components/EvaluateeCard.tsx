@@ -73,6 +73,8 @@ export const EvaluateeCard: React.FC<EvaluateeCardProps> = ({
     isFullyEvaluated,
     submissions,
   } = item;
+  // Always get live evaluatee user details (including updated photo) from realtime users state
+  const currentEvaluatee = users.find((u) => u.id === evaluatee.id) || evaluatee;
   const gradeInfo = getGradeInfo(item.finalGrade, gradeThresholds);
 
   // Find committee group and evaluators
@@ -143,14 +145,14 @@ export const EvaluateeCard: React.FC<EvaluateeCardProps> = ({
           <div className="flex items-start gap-3 min-w-0">
             {/* Avatar Circle */}
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center text-lg font-bold shadow-xs shrink-0 overflow-hidden group-hover/header:scale-105 transition-transform">
-              {(evaluatee.avatar || evaluatee.avatarUrl) ? (
+              {(currentEvaluatee.avatar || currentEvaluatee.avatarUrl) ? (
                 <img
-                  src={evaluatee.avatar || evaluatee.avatarUrl}
-                  alt={evaluatee.name}
+                  src={currentEvaluatee.avatar || currentEvaluatee.avatarUrl}
+                  alt={currentEvaluatee.name}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                evaluatee.name.charAt(0)
+                currentEvaluatee.name.charAt(0)
               )}
             </div>
 
@@ -158,7 +160,7 @@ export const EvaluateeCard: React.FC<EvaluateeCardProps> = ({
             <div className="space-y-1.5 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h4 className="text-sm sm:text-base font-bold text-slate-900 group-hover/header:text-teal-700 transition truncate">
-                  {evaluatee.name}
+                  {currentEvaluatee.name}
                 </h4>
                 {isUserAssigned && (
                   <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.2 rounded-full">

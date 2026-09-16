@@ -24,9 +24,12 @@ import {
   Settings,
   FileDown,
   Loader2,
+  Camera,
+  Upload,
 } from 'lucide-react';
 import { getGradeInfo } from '../utils/evaluationCalculator';
 import { downloadIndividualPdf } from '../utils/pdfExport';
+import { compressAndResizeImage } from '../utils/imageUtils';
 import { SingleEvaluationModal } from './SingleEvaluationModal';
 import { AdminEditSubmissionModal } from './AdminEditSubmissionModal';
 
@@ -45,10 +48,12 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   onEvaluate,
   gradeThresholds,
 }) => {
-  const { users, committeeGroups, currentUser, systemSettings } = useApp();
+  const { users, committeeGroups, currentUser, systemSettings, updateUserProfile } = useApp();
   const [selectedSubmission, setSelectedSubmission] = useState<EvaluationSubmission | null>(null);
   const [adminEditingSubmission, setAdminEditingSubmission] = useState<EvaluationSubmission | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = React.useRef<HTMLInputElement>(null);
 
   if (!item) return null;
 
@@ -65,6 +70,23 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
   };
 
   const { evaluatee, submissions, gradeThresholds: itemThresholds } = item;
+  // Always get the latest user data from users state (reflects Firestore in real time)
+  const currentEvaluatee = users.find((u) => u.id === evaluatee.id) || evaluatee;
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingPhoto(true);
+      const compressed = await compressAndResizeImage(file, 400, 400, 0.85);
+      updateUserProfile(evaluatee.id, { avatar: compressed, avatarUrl: compressed });
+    } catch (err) {
+      console.error('Failed to upload candidate photo:', err);
+      alert('เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
   const gradeInfo = getGradeInfo(item.finalGrade, gradeThresholds);
 
   // Find committee group
@@ -125,22 +147,44 @@ export const CandidateDetailModal: React.FC<CandidateDetailModalProps> = ({
                 
                 {/* Candidate Info + Avatar */}
                 <div className="flex items-start sm:items-center gap-4">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center text-2xl font-bold shadow-inner shrink-0 overflow-hidden">
-                    {(evaluatee.avatar || evaluatee.avatarUrl) ? (
-                      <img src={evaluatee.avatar || evaluatee.avatarUrl} alt={evaluatee.name} className="w-full h-full object-cover" />
-                    ) : (
-                      evaluatee.name.charAt(0)
-                    )}
+                  <div className="relative group/avatar shrink-0">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center text-2xl font-bold shadow-inner overflow-hidden">
+                      {(currentEvaluatee.avatar || currentEvaluatee.avatarUrl) ? (
+                        <img src={currentEvaluatee.avatar || currentEvaluatee.avatarUrl} alt={currentEvaluatee.name} className="w-full h-full object-cover" />
+                      ) : (
+                        currentEvaluatee.name.charAt(0)
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                      title="อัปโหลดหรือเปลี่ยนรูปถ่ายผู้รับการประเมิน (บันทึกขึ้น Firebase Realtime ทันที)"
+                      className="absolute -bottom-1.5 -right-1.5 p-1 bg-white hover:bg-slate-100 text-blue-700 rounded-full shadow-md border border-white/80 transition-transform active:scale-95 cursor-pointer"
+                    >
+                      {isUploadingPhoto ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                      ) : (
+                        <Camera className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoChange}
+                      className="hidden"
+                    />
                   </div>
 
                   <div className="space-y-1">
                     <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-                      {evaluatee.name}
+                      {currentEvaluatee.name}
                     </h2>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-sky-100 font-medium">
                       <div className="flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5 text-sky-200" />
-                        <span>{evaluatee.department}</span>
+                        <span>{currentEvaluatee.department}</span>
                       </div>
                       <span>•</span>
                       <div className="flex items-center gap-1.5">

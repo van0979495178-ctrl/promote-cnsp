@@ -33,6 +33,7 @@ import {
 import { PRESET_LOGOS, PES_GOLD_LOGO } from '../data/presetLogos';
 import { TargetPositionGroupModal } from './TargetPositionGroupModal';
 import { firebaseConfig } from '../firebase/config';
+import { compressAndResizeImage } from '../utils/imageUtils';
 
 export const SystemSettingsView: React.FC = () => {
   const {
@@ -67,19 +68,25 @@ export const SystemSettingsView: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [customUrlInput, setCustomUrlInput] = useState('');
 
-  // Handle Logo Upload (File Picker or Drag & Drop)
-  const processUploadedFile = (file: File) => {
+  // Handle Logo Upload (File Picker or Drag & Drop) with automatic compression for Firebase
+  const processUploadedFile = async (file: File) => {
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('กรุณาเลือกไฟล์ภาพโลโก้ขนาดไม่เกิน 5MB');
+      if (file.size > 10 * 1024 * 1024) {
+        alert('กรุณาเลือกไฟล์ภาพโลโก้ขนาดไม่เกิน 10MB');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        setFormData((prev) => ({ ...prev, logoUrl: result }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressAndResizeImage(file, 380, 380, 0.88);
+        setFormData((prev) => ({ ...prev, logoUrl: compressed }));
+      } catch (err) {
+        console.error('Failed to compress logo image:', err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          setFormData((prev) => ({ ...prev, logoUrl: result }));
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
