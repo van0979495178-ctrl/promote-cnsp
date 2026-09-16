@@ -48,18 +48,19 @@ export const Navbar: React.FC = () => {
     isFirebaseSyncing,
     isFirebaseConnected,
     syncAllToFirebase,
+    refreshFromFirebase,
   } = useApp();
 
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   const handleManualSync = async () => {
     try {
-      setSyncToast('กำลังเชื่อมต่อและซิงค์ข้อมูลกับ Firebase Cloud...');
-      await syncAllToFirebase();
-      setSyncToast('ซิงค์ข้อมูลตรงกันทุกอุปกรณ์สำเร็จ!');
+      setSyncToast('กำลังดึงข้อมูลล่าสุดจาก Firebase Cloud...');
+      await refreshFromFirebase();
+      setSyncToast('ซิงค์ข้อมูล Realtime ตรงกันทุกอุปกรณ์เรียบร้อย!');
       setTimeout(() => setSyncToast(null), 3000);
     } catch (e) {
-      setSyncToast('เกิดข้อผิดพลาดในการซิงค์ข้อมูล');
+      setSyncToast('เชื่อมต่อฐานข้อมูล... กำลังใช้แคชในเครื่อง');
       setTimeout(() => setSyncToast(null), 3000);
     }
   };

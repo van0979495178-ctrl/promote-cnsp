@@ -1,5 +1,12 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  getDocFromServer
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -10,8 +17,22 @@ export { firebaseConfig };
 // Initialize Firebase App instance safely
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore (CRITICAL: passing firestoreDatabaseId ensures connecting to the provisioned database) & Auth
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with robust multi-tab and offline cache support across iOS, Android, and PC
+function initDb() {
+  if (typeof window !== 'undefined') {
+    try {
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      }, firebaseConfig.firestoreDatabaseId);
+    } catch (e) {
+      console.warn('initializeFirestore fallback to getFirestore:', e);
+      return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    }
+  }
+  return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+}
+
+export const db = initDb();
 export const auth = getAuth(app);
 
 // Initialize Analytics conditionally

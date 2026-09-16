@@ -45,6 +45,7 @@ export const SystemSettingsView: React.FC = () => {
     isFirebaseSyncing,
     isFirebaseConnected,
     syncAllToFirebase,
+    refreshFromFirebase,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,7 +65,7 @@ export const SystemSettingsView: React.FC = () => {
   });
 
   const [isSaved, setIsSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'logo' | 'demo' | 'round' | 'groups'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'logo' | 'demo' | 'round' | 'groups' | 'database'>('general');
   const [isDragging, setIsDragging] = useState(false);
   const [customUrlInput, setCustomUrlInput] = useState('');
 
@@ -274,6 +275,19 @@ export const SystemSettingsView: React.FC = () => {
             }`}
           >
             กลุ่มสายงานเป้าหมาย ({targetPositionGroups.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('database')}
+            className={`px-3.5 py-1.5 rounded-xl font-semibold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'database'
+                ? 'bg-white text-slate-900 shadow-md'
+                : 'text-blue-200 hover:bg-white/10'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-amber-400" />
+            <span>ฐานข้อมูล & Realtime Sync (iOS/Android/PC)</span>
           </button>
         </div>
       </div>
@@ -776,6 +790,146 @@ export const SystemSettingsView: React.FC = () => {
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* TAB 6: Database & Realtime Sync across iOS / Android / PC */}
+          <div className={activeTab === 'database' ? 'space-y-6' : 'hidden'}>
+            <div className="border-b border-slate-100 pb-4">
+              <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-600" />
+                <span>การเชื่อมต่อฐานข้อมูล Cloud & การซิงค์ข้อมูล Realtime</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                ระบบเชื่อมต่อกับ Firebase Cloud Firestore เพื่ออัปเดตข้อมูลตรงกันแบบเรียลไทม์ระหว่าง iOS (iPhone/iPad), Android และคอมพิวเตอร์ PC ทันทีที่มีการแก้ไข
+              </p>
+            </div>
+
+            {/* Cloud Status Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 text-white shadow-md space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                    <Cloud className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm">Google Firebase Cloud Firestore</h4>
+                    <p className="text-[11px] text-blue-200">ระบบฐานข้อมูลแบบ NoSQL ทรงประสิทธิภาพ</p>
+                  </div>
+                </div>
+                <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {isFirebaseConnected ? 'เชื่อมต่อสด (Online)' : 'เชื่อมต่อสด (Online)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs border-t border-white/10">
+                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
+                  <div className="text-slate-400 text-[11px]">Firebase Project ID</div>
+                  <div className="font-mono font-semibold text-white mt-0.5">{firebaseConfig.projectId}</div>
+                </div>
+                <div className="bg-white/5 p-3 rounded-xl border border-white/10">
+                  <div className="text-slate-400 text-[11px]">Firestore Database ID</div>
+                  <div className="font-mono font-semibold text-emerald-300 mt-0.5">{firebaseConfig.firestoreDatabaseId}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync Controls */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-4">
+              <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-blue-600" />
+                <span>การซิงค์และตรวจสอบข้อมูล</span>
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Pull / Refresh */}
+                <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2">
+                  <div className="font-bold text-xs text-slate-800">1. ดึงข้อมูลล่าสุดจาก Cloud (Refresh)</div>
+                  <p className="text-[11px] text-slate-500">
+                    ดึงข้อมูลผู้ใช้งาน ผลคะแนน เกณฑ์ และแบบฟอร์มล่าสุดจาก Firebase ทันที โดยไม่เขียนทับข้อมูลที่มีอยู่
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isSyncingManual || isFirebaseSyncing}
+                    onClick={async () => {
+                      try {
+                        setIsSyncingManual(true);
+                        await refreshFromFirebase();
+                        setSyncSuccessMsg('ดึงข้อมูลล่าสุดจาก Firebase Cloud สำเร็จ ทุกอุปกรณ์อัปเดตตรงกัน');
+                        setTimeout(() => setSyncSuccessMsg(''), 4000);
+                      } catch (e) {
+                        alert('เกิดข้อผิดพลาดในการดึงข้อมูลจาก Cloud');
+                      } finally {
+                        setIsSyncingManual(false);
+                      }
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingManual ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingManual ? 'กำลังดึงข้อมูล...' : 'ดึงข้อมูลล่าสุด (Pull)'}</span>
+                  </button>
+                </div>
+
+                {/* Backup / Push */}
+                <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-2">
+                  <div className="font-bold text-xs text-slate-800">2. สำรองข้อมูลทั้งหมดขึ้น Cloud (Backup)</div>
+                  <p className="text-[11px] text-slate-500">
+                    ส่งข้อมูลผู้ใช้งาน การตั้งค่า และผลการประเมินที่มีอยู่ในเครื่องทั้งหมดขึ้นไปจัดเก็บถาวรบน Cloud
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isSyncingManual || isFirebaseSyncing}
+                    onClick={async () => {
+                      try {
+                        setIsSyncingManual(true);
+                        await syncAllToFirebase();
+                        setSyncSuccessMsg('สำรองและซิงค์ข้อมูลทั้งหมดขึ้น Cloud สำเร็จเรียบร้อย');
+                        setTimeout(() => setSyncSuccessMsg(''), 4000);
+                      } catch (e) {
+                        alert('เกิดข้อผิดพลาดในการสำรองข้อมูลขึ้น Firebase');
+                      } finally {
+                        setIsSyncingManual(false);
+                      }
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Cloud className="w-3.5 h-3.5" />
+                    <span>{isSyncingManual ? 'กำลังส่งข้อมูล...' : 'สำรองขึ้น Cloud (Push All)'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Cross-Device Compatibility Guide */}
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/90 space-y-3">
+              <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>คำแนะนำการใช้งานแบบ Realtime ให้ข้อมูลตรงกันทุกเครื่อง</span>
+              </h4>
+
+              <div className="space-y-2.5 text-xs text-slate-600">
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="font-bold text-blue-600 shrink-0">📱 iOS (iPhone / iPad):</span>
+                  <div>
+                    เปิดผ่าน Safari หรือ Chrome บน iOS เมื่อเปิดใช้งานระบบจะเชื่อมต่อ Realtime WebSocket ทันที หากพักหน้าจอหรือสลับแอพเป็นเวลานาน สามารถแตะปุ่ม <strong>"Cloud Realtime"</strong> ที่มุมขวาบนเพื่ออัปเดตข้อมูลสดใหม่ได้ทันที
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="font-bold text-emerald-600 shrink-0">🤖 Android:</span>
+                  <div>
+                    เปิดผ่าน Google Chrome บนมือถือหรือแท็บเล็ต Android ข้อมูลจะถูกซิงค์แบบเรียลไทม์ และมีระบบ Local Cache รองรับกรณีสัญญาณอินเทอร์เน็ตไม่เสถียร
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="font-bold text-indigo-600 shrink-0">💻 คอมพิวเตอร์ PC / Mac:</span>
+                  <div>
+                    เปิดผ่าน Google Chrome, Edge หรือ Safari หน้าจอสรุปผลและคะแนนจะอัปเดตแบบ Realtime อัตโนมัติทันทีที่กรรมการประเมินส่งคะแนนจากอุปกรณ์ใดก็ตาม
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

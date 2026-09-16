@@ -199,6 +199,7 @@ interface AppContextType {
   isFirebaseSyncing: boolean;
   isFirebaseConnected: boolean;
   syncAllToFirebase: () => Promise<void>;
+  refreshFromFirebase: () => Promise<void>;
   
   // Navigation / Active Context
   activeView: ViewType;
@@ -412,62 +413,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setIsFirebaseSyncing(true);
 
-        // Verify remote users and settings count in Firestore
-        const remoteUsers = await FirebaseService.getUsers();
-        const remoteSettings = await FirebaseService.getSystemSettings();
-
-        // If Firestore is empty or has an older partial dataset (< 30 staff members)
-        if (!remoteSettings || !remoteUsers || remoteUsers.length < 30) {
-          console.log('Syncing and seeding complete initial dataset (30 evaluatees + committees) to Firebase Firestore...');
-          await FirebaseService.seedInitialData(
-            INITIAL_USERS,
-            INITIAL_COMMITTEE_GROUPS,
-            FORM_TEMPLATES,
-            INITIAL_SUBMISSIONS,
-            DEFAULT_SETTINGS,
-            GRADE_THRESHOLDS,
-            INITIAL_TARGET_POSITION_GROUPS
-          );
-        } else {
-          // Check if remote roles need synchronization for Pratchya and Rannaphat
-          const pratchyaRemote = remoteUsers.find((u) => u.name.includes('ปรัชญา'));
-          const rannaphatRemote = remoteUsers.find((u) => u.name.includes('รัณย์ณภัทร'));
-          if ((pratchyaRemote && pratchyaRemote.role === 'admin') || (rannaphatRemote && rannaphatRemote.role !== 'admin')) {
-            console.log('Synchronizing swapped roles to Firebase Firestore...');
-            if (pratchyaRemote) {
-              await FirebaseService.saveUser({
-                ...pratchyaRemote,
-                role: 'evaluator',
-                position: 'ผู้อำนวยการชำนาญการพิเศษ (ประธานกรรมการอำนวยการ / คณะกรรมการ)',
-                avatarUrl: OFFICIAL_AVATARS['evaluator_director'],
-                avatar: OFFICIAL_AVATARS['evaluator_director'],
-              });
-            }
-            if (rannaphatRemote) {
-              await FirebaseService.saveUser({
-                ...rannaphatRemote,
-                role: 'admin',
-                position: 'ครูชำนาญการ (ผู้ดูแลระบบ / Admin & กรรมการลงทะเบียนและรวบรวมคะแนน)',
-                avatarUrl: OFFICIAL_AVATARS['user_admin_1'],
-                avatar: OFFICIAL_AVATARS['user_admin_1'],
-              });
-            }
-          }
-
-          // Check if any committee or admin needs official avatar default on Firestore if empty
-          for (const remoteUser of remoteUsers) {
-            if (OFFICIAL_AVATARS[remoteUser.id] && !remoteUser.avatarUrl && !remoteUser.avatar) {
-              console.log(`Setting default official avatar for ${remoteUser.name} on Firestore...`);
-              await FirebaseService.saveUser({
-                ...remoteUser,
-                avatarUrl: OFFICIAL_AVATARS[remoteUser.id],
-                avatar: OFFICIAL_AVATARS[remoteUser.id],
-              });
-            }
-          }
-        }
-
-        // Setup real-time listeners for all models across all devices (PC, Android, iOS)
+        // Attach pure real-time listeners for all models across all devices (PC, Android, iOS)
+        // Strictly READ-ONLY inside listeners to guarantee zero infinite write loops and optimal quota
         unsubSettings = FirebaseService.listenSystemSettings((remoteSettings) => {
           if (remoteSettings) {
             setSystemSettings((prev) => ({ ...prev, ...remoteSettings }));
@@ -489,58 +436,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         unsubTargetGroups = FirebaseService.listenTargetPositionGroups((remoteTargetGroups) => {
           if (remoteTargetGroups && remoteTargetGroups.length > 0) {
-            const needsUpgrade =
-              remoteTargetGroups.length < 3 ||
-              remoteTargetGroups.some(
-                (g) =>
-                  g.name.includes('กลุ่มที่ 1: ลูกจ้างชั่วคราว') ||
-                  g.name.includes('กลุ่มที่ 2: ลูกจ้างชั่วคราว') ||
-                  g.code?.includes('(ครูผู้ช่วย)') ||
-                  g.code?.includes('(จ้างเหมาบริการ)')
-              );
-            if (needsUpgrade) {
-              console.log('Upgrading target position groups to include Group 3 and updated clean names in Firebase...');
-              INITIAL_TARGET_POSITION_GROUPS.forEach((tg) => {
-                FirebaseService.saveTargetPositionGroup(tg).catch(console.error);
-              });
-              setTargetPositionGroups(INITIAL_TARGET_POSITION_GROUPS);
-            } else {
-              setTargetPositionGroups(remoteTargetGroups);
-            }
-          } else {
-            INITIAL_TARGET_POSITION_GROUPS.forEach((tg) => {
-              FirebaseService.saveTargetPositionGroup(tg).catch(console.error);
-            });
-            setTargetPositionGroups(INITIAL_TARGET_POSITION_GROUPS);
+            setTargetPositionGroups(remoteTargetGroups);
           }
         });
 
         unsubTemplates = FirebaseService.listenFormTemplates((remoteTemplates) => {
           if (remoteTemplates && remoteTemplates.length > 0) {
-            let updatedList = [...remoteTemplates];
-            let modified = false;
-
-            const hasGovTeacher = updatedList.some((t) => t.id === 'form_government_employee_teacher');
-            if (!hasGovTeacher) {
-              const govTemplate = FORM_TEMPLATES.find((t) => t.id === 'form_government_employee_teacher');
-              if (govTemplate) {
-                FirebaseService.saveFormTemplate(govTemplate).catch(console.error);
-                updatedList.push(govTemplate);
-                modified = true;
-              }
-            }
-
-            const hasClerical = updatedList.some((t) => t.id === 'form_support_clerical');
-            if (!hasClerical) {
-              const clericalTemplate = FORM_TEMPLATES.find((t) => t.id === 'form_support_clerical');
-              if (clericalTemplate) {
-                FirebaseService.saveFormTemplate(clericalTemplate).catch(console.error);
-                updatedList.push(clericalTemplate);
-                modified = true;
-              }
-            }
-
-            setFormTemplates(updatedList);
+            setFormTemplates(remoteTemplates);
           }
         });
 
@@ -551,20 +453,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const sorted = [...remoteSubs].sort(
               (a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
             );
-            const duplicatesToDelete: string[] = [];
 
             sorted.forEach((sub) => {
               const key = `${sub.evaluateeId}_${sub.evaluatorId}`;
-              const prev = subMap.get(key);
-              if (prev && prev.id !== sub.id) {
-                duplicatesToDelete.push(prev.id);
-              }
               subMap.set(key, sub);
-            });
-
-            // Clean up duplicate documents from Firestore
-            duplicatesToDelete.forEach((dupId) => {
-              FirebaseService.deleteSubmission(dupId).catch(console.error);
             });
 
             setSubmissions(Array.from(subMap.values()));
@@ -689,7 +581,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     FirebaseService.addAuditLog(newLog).catch(console.error);
   };
 
-  // Explicit sync button
+  // Fetch and refresh latest data from Firebase Firestore without overwriting
+  const refreshFromFirebase = async () => {
+    setIsFirebaseSyncing(true);
+    try {
+      const [
+        remoteSettings,
+        remoteUsers,
+        remoteGroups,
+        remoteTargetGroups,
+        remoteTemplates,
+        remoteSubs,
+        remoteThresholds,
+        remoteLogs,
+      ] = await Promise.all([
+        FirebaseService.getSystemSettings(),
+        FirebaseService.getUsers(),
+        FirebaseService.getCommitteeGroups(),
+        FirebaseService.getTargetPositionGroups(),
+        FirebaseService.getFormTemplates(),
+        FirebaseService.getSubmissions(),
+        FirebaseService.getGradeThresholds(),
+        FirebaseService.getAuditLogs(),
+      ]);
+
+      if (remoteSettings) {
+        setSystemSettings((prev) => ({ ...prev, ...remoteSettings }));
+      }
+      if (remoteUsers && remoteUsers.length > 0) {
+        const { sanitized } = sanitizeAndFixUsers(remoteUsers);
+        setUsers(sanitized);
+      }
+      if (remoteGroups && remoteGroups.length > 0) {
+        setCommitteeGroups(remoteGroups);
+      }
+      if (remoteTargetGroups && remoteTargetGroups.length > 0) {
+        setTargetPositionGroups(remoteTargetGroups);
+      }
+      if (remoteTemplates && remoteTemplates.length > 0) {
+        setFormTemplates(remoteTemplates);
+      }
+      if (remoteSubs) {
+        const subMap = new Map<string, EvaluationSubmission>();
+        remoteSubs.forEach((s) => subMap.set(`${s.evaluateeId}_${s.evaluatorId}`, s));
+        setSubmissions(Array.from(subMap.values()));
+      }
+      if (remoteThresholds && remoteThresholds.length > 0) {
+        setGradeThresholds(remoteThresholds);
+      }
+      if (remoteLogs && remoteLogs.length > 0) {
+        setAuditLogs(remoteLogs);
+      }
+
+      setIsFirebaseConnected(true);
+    } catch (e) {
+      console.error('Firebase manual refresh error:', e);
+      throw e;
+    } finally {
+      setIsFirebaseSyncing(false);
+    }
+  };
+
+  // Explicit sync button (Backup all local state to Firebase Cloud)
   const syncAllToFirebase = async () => {
     setIsFirebaseSyncing(true);
     try {
@@ -1143,6 +1096,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isFirebaseSyncing,
         isFirebaseConnected,
         syncAllToFirebase,
+        refreshFromFirebase,
         activeView,
         setActiveView,
         selectedFormId,
