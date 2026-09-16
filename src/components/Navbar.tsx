@@ -33,6 +33,8 @@ import {
 import { User, UserRole } from '../types';
 import { LoginModal } from './LoginModal';
 import { CommitteeProfileModal } from './CommitteeProfileModal';
+import { FirebaseRulesGuideModal } from './FirebaseRulesGuideModal';
+import { CHAINAT_SCHOOL_LOGO } from '../data/presetLogos';
 
 export const Navbar: React.FC = () => {
   const {
@@ -47,21 +49,31 @@ export const Navbar: React.FC = () => {
     systemSettings,
     isFirebaseSyncing,
     isFirebaseConnected,
+    firebasePermissionError,
     syncAllToFirebase,
     refreshFromFirebase,
   } = useApp();
 
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [isRulesGuideOpen, setIsRulesGuideOpen] = useState(false);
 
   const handleManualSync = async () => {
+    if (firebasePermissionError) {
+      setIsRulesGuideOpen(true);
+      return;
+    }
     try {
       setSyncToast('กำลังดึงข้อมูลล่าสุดจาก Firebase Cloud...');
       await refreshFromFirebase();
       setSyncToast('ซิงค์ข้อมูล Realtime ตรงกันทุกอุปกรณ์เรียบร้อย!');
       setTimeout(() => setSyncToast(null), 3000);
-    } catch (e) {
-      setSyncToast('เชื่อมต่อฐานข้อมูล... กำลังใช้แคชในเครื่อง');
-      setTimeout(() => setSyncToast(null), 3000);
+    } catch (e: any) {
+      if (e?.code === 'permission-denied') {
+        setIsRulesGuideOpen(true);
+      } else {
+        setSyncToast('เชื่อมต่อฐานข้อมูล... กำลังใช้แคชในเครื่อง');
+        setTimeout(() => setSyncToast(null), 3000);
+      }
     }
   };
 
@@ -169,15 +181,15 @@ export const Navbar: React.FC = () => {
                 className="flex items-center gap-3 cursor-pointer select-none group"
               >
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 flex items-center justify-center text-white shadow-md shadow-blue-700/25 group-hover:scale-105 transition overflow-hidden p-1.5">
-                  {systemSettings.logoUrl ? (
-                    <img
-                      src={systemSettings.logoUrl}
-                      alt={systemSettings.appName}
-                      className="w-full h-full object-contain filter drop-shadow-xs"
-                    />
-                  ) : (
-                    <Award className="w-6 h-6 text-amber-300" />
-                  )}
+                  <img
+                    src={systemSettings.logoUrl && systemSettings.logoUrl.trim().length > 0 ? systemSettings.logoUrl : CHAINAT_SCHOOL_LOGO}
+                    alt={systemSettings.appName}
+                    className="w-full h-full object-contain filter drop-shadow-xs"
+                    onError={(e) => {
+                      // Fallback to official emblem if custom URL fails or is empty
+                      e.currentTarget.src = CHAINAT_SCHOOL_LOGO;
+                    }}
+                  />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -202,20 +214,33 @@ export const Navbar: React.FC = () => {
                 type="button"
                 onClick={handleManualSync}
                 disabled={isFirebaseSyncing}
-                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 border border-slate-200/80 text-[11px] font-semibold text-slate-700 transition cursor-pointer shadow-2xs"
-                title="คลิกเพื่อซิงค์ข้อมูลล่าสุดกับ Firebase Cloud ทันที (เชื่อมต่อสด PC, iOS, Android)"
+                className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition cursor-pointer shadow-2xs ${
+                  firebasePermissionError
+                    ? 'bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 animate-pulse'
+                    : 'bg-slate-100 hover:bg-slate-200/80 active:scale-95 border-slate-200/80 text-slate-700'
+                }`}
+                title={firebasePermissionError ? 'คลิกดูวิธีเปิดสิทธิ์ Rules ใน Firebase Console' : 'คลิกเพื่อซิงค์ข้อมูลล่าสุดกับ Firebase Cloud ทันที (เชื่อมต่อสด PC, iOS, Android)'}
               >
                 {isFirebaseSyncing ? (
                   <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                ) : firebasePermissionError ? (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
                 ) : (
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                   </span>
                 )}
-                <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-slate-600 text-[11px] hidden sm:inline">
-                  {isFirebaseSyncing ? 'กำลังซิงค์...' : 'Cloud Realtime'}
+                <Cloud className={`w-3.5 h-3.5 ${firebasePermissionError ? 'text-amber-600' : 'text-blue-600'}`} />
+                <span className="text-[11px] hidden sm:inline">
+                  {isFirebaseSyncing
+                    ? 'กำลังซิงค์...'
+                    : firebasePermissionError
+                    ? 'รอเปิด Rules (คลิก)'
+                    : 'Cloud Realtime'}
                 </span>
               </button>
 
@@ -499,22 +524,38 @@ export const Navbar: React.FC = () => {
               {/* Cloud Sync Status on Mobile */}
               <button
                 type="button"
-                onClick={handleManualSync}
+                onClick={() => {
+                  if (firebasePermissionError) {
+                    setIsMobileMenuOpen(false);
+                    setIsRulesGuideOpen(true);
+                  } else {
+                    handleManualSync();
+                  }
+                }}
                 disabled={isFirebaseSyncing}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-white hover:bg-slate-100/80 active:scale-95 border border-slate-200 text-xs transition cursor-pointer"
+                className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition cursor-pointer ${
+                  firebasePermissionError ? 'bg-amber-50 border-amber-300' : 'bg-white hover:bg-slate-100/80 border-slate-200'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   {isFirebaseSyncing ? (
                     <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
                   ) : (
-                    <Cloud className="w-4 h-4 text-blue-600" />
+                    <Cloud className={`w-4 h-4 ${firebasePermissionError ? 'text-amber-600' : 'text-blue-600'}`} />
                   )}
-                  <span className="font-semibold text-slate-700">Firebase Firestore</span>
+                  <span className="font-semibold text-slate-700">Firebase Cloud</span>
                 </div>
-                <span className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  {isFirebaseSyncing ? 'กำลังซิงค์...' : 'แตะเพื่อซิงค์สด'}
-                </span>
+                {firebasePermissionError ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    รอเปิด Rules
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    {isFirebaseSyncing ? 'กำลังซิงค์...' : 'แตะเพื่อซิงค์สด'}
+                  </span>
+                )}
               </button>
 
               {systemSettings.isDemoMode && (
@@ -599,6 +640,12 @@ export const Navbar: React.FC = () => {
       <CommitteeProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Firebase Rules Guide Modal */}
+      <FirebaseRulesGuideModal
+        isOpen={isRulesGuideOpen}
+        onClose={() => setIsRulesGuideOpen(false)}
       />
     </>
   );

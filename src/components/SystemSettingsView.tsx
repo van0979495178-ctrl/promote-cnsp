@@ -29,8 +29,11 @@ import {
   RefreshCw,
   Cloud,
   CloudCheck,
+  ShieldAlert,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
-import { PRESET_LOGOS, PES_GOLD_LOGO } from '../data/presetLogos';
+import { PRESET_LOGOS, PES_GOLD_LOGO, CHAINAT_SCHOOL_LOGO } from '../data/presetLogos';
 import { TargetPositionGroupModal } from './TargetPositionGroupModal';
 import { firebaseConfig } from '../firebase/config';
 import { compressAndResizeImage } from '../utils/imageUtils';
@@ -44,6 +47,7 @@ export const SystemSettingsView: React.FC = () => {
     currentUser,
     isFirebaseSyncing,
     isFirebaseConnected,
+    firebasePermissionError,
     syncAllToFirebase,
     refreshFromFirebase,
   } = useApp();
@@ -52,13 +56,14 @@ export const SystemSettingsView: React.FC = () => {
   const [isSyncingManual, setIsSyncingManual] = useState(false);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState('');
   const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
+  const [copiedRules, setCopiedRules] = useState(false);
 
   const [formData, setFormData] = useState({
     appName: systemSettings.appName,
     appShortName: systemSettings.appShortName,
     schoolName: systemSettings.schoolName,
     schoolAffiliation: systemSettings.schoolAffiliation,
-    logoUrl: systemSettings.logoUrl || '',
+    logoUrl: systemSettings.logoUrl || CHAINAT_SCHOOL_LOGO,
     isDemoMode: systemSettings.isDemoMode,
     academicYear: systemSettings.academicYear,
     evaluationRound: systemSettings.evaluationRound,
@@ -835,6 +840,62 @@ export const SystemSettingsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Firebase Security Rules Notice & Setup */}
+            <div className={`p-5 rounded-2xl border space-y-3 ${
+              firebasePermissionError
+                ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-sm'
+                : 'bg-white border-slate-200/90 text-slate-800'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className={`w-5 h-5 ${firebasePermissionError ? 'text-amber-600' : 'text-blue-600'}`} />
+                  <span className="font-bold text-xs sm:text-sm">
+                    {firebasePermissionError
+                      ? '⚠️ แจ้งเตือน: Firebase รอเปิดสิทธิ์ Security Rules (เพื่อซิงค์สดข้ามอุปกรณ์)'
+                      : 'ความปลอดภัยและกฎการเข้าถึง (Firebase Security Rules)'}
+                  </span>
+                </div>
+                <a
+                  href="https://console.firebase.google.com/project/promote-cnsp/firestore/rules"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
+                >
+                  <span>เปิด Rules ใน Firebase Console</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                เพื่อให้ข้อมูลทั้งหมด (โลโก้, รายชื่อ, กลุ่มกรรมการ, ผลประเมิน) ซิงค์เรียลไทม์ระหว่าง <strong>PC, iPad, iPhone และ Android</strong> อย่างสมบูรณ์ ให้คัดลอกกฎนี้ไปวางในหน้า <strong>Firestore Rules</strong> แล้วกด <strong>Publish</strong>:
+              </p>
+
+              <div className="relative">
+                <pre className="bg-slate-900 text-amber-300 p-3.5 rounded-xl font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed select-all">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`);
+                    setCopiedRules(true);
+                    setTimeout(() => setCopiedRules(false), 2500);
+                  }}
+                  className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 cursor-pointer shadow-xs transition"
+                >
+                  {copiedRules ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedRules ? 'คัดลอกแล้ว!' : 'คัดลอกโค้ด'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Sync Controls */}
             <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-4">
               <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
@@ -860,8 +921,8 @@ export const SystemSettingsView: React.FC = () => {
                         setTimeout(() => setSyncSuccessMsg(''), 4000);
                       } catch (e: any) {
                         const msg = e?.message || '';
-                        if (msg.includes('permission-denied') || msg.includes('API has not been used')) {
-                          alert('กรุณาเปิดใช้งาน Firestore Database ใน Firebase Console ครั้งแรก:\n1. ไปที่ https://console.firebase.google.com/project/promote-cnsp/firestore\n2. กด "Create database"\n3. เลือกโหมด Test Mode แล้วกดยืนยัน');
+                        if (msg.includes('permission-denied') || msg.includes('PERMISSION_DENIED')) {
+                          alert('โปรเจกต์ยังติดสิทธิ์ Rules (permission-denied):\n1. กรุณากดปุ่ม "เปิด Rules ใน Firebase Console"\n2. วางโค้ดกฎด้านบนนี้\n3. กด Publish');
                         } else {
                           alert('เกิดข้อผิดพลาดในการดึงข้อมูลจาก Cloud: ' + (msg || 'โปรดตรวจสอบการเชื่อมต่อ'));
                         }
@@ -893,8 +954,8 @@ export const SystemSettingsView: React.FC = () => {
                         setTimeout(() => setSyncSuccessMsg(''), 4000);
                       } catch (e: any) {
                         const msg = e?.message || '';
-                        if (msg.includes('permission-denied') || msg.includes('API has not been used')) {
-                          alert('กรุณาเปิดใช้งาน Firestore Database ใน Firebase Console ครั้งแรก:\n1. ไปที่ https://console.firebase.google.com/project/promote-cnsp/firestore\n2. กด "Create database"\n3. เลือกโหมด Test Mode แล้วกดยืนยัน');
+                        if (msg.includes('permission-denied') || msg.includes('PERMISSION_DENIED')) {
+                          alert('โปรเจกต์ยังติดสิทธิ์ Rules (permission-denied):\n1. กรุณากดปุ่ม "เปิด Rules ใน Firebase Console"\n2. วางโค้ดกฎด้านบนนี้\n3. กด Publish');
                         } else {
                           alert('เกิดข้อผิดพลาดในการสำรองข้อมูลขึ้น Firebase: ' + (msg || 'โปรดตรวจสอบการเชื่อมต่อ'));
                         }
@@ -962,9 +1023,16 @@ export const SystemSettingsView: React.FC = () => {
                       src={formData.logoUrl}
                       alt="Logo"
                       className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.src = CHAINAT_SCHOOL_LOGO;
+                      }}
                     />
                   ) : (
-                    <Award className="w-5 h-5 text-amber-300" />
+                    <img
+                      src={CHAINAT_SCHOOL_LOGO}
+                      alt="Logo"
+                      className="w-full h-full object-contain"
+                    />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -989,12 +1057,15 @@ export const SystemSettingsView: React.FC = () => {
                 หัวเอกสารราชการ (Official Document Mockup):
               </span>
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 text-center space-y-1.5 font-serif text-slate-800">
-                <div className="w-10 h-10 mx-auto rounded-full bg-white border border-slate-300 flex items-center justify-center p-1 shadow-inner">
-                  {formData.logoUrl ? (
-                    <img src={formData.logoUrl} alt="Logo" className="w-full h-full object-contain" />
-                  ) : (
-                    <span className="text-[11px] font-bold text-slate-700">ตรา</span>
-                  )}
+                <div className="w-10 h-10 mx-auto rounded-full bg-white border border-slate-300 flex items-center justify-center p-1 shadow-inner overflow-hidden">
+                  <img
+                    src={formData.logoUrl || CHAINAT_SCHOOL_LOGO}
+                    alt="Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = CHAINAT_SCHOOL_LOGO;
+                    }}
+                  />
                 </div>
                 <div className="text-xs font-bold text-slate-900 font-sans">
                   แบบสรุปผลการประเมินการปฏิบัติงานของลูกจ้างชั่วคราว

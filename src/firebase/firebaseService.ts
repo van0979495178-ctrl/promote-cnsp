@@ -48,7 +48,21 @@ function sanitizeForFirestore<T>(data: T): T {
   );
 }
 
+let globalPermissionErrorHandler: ((err: any) => void) | null = null;
+
+function notifyIfPermissionError(error: any) {
+  if (error && (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions') || error.message?.includes('PERMISSION_DENIED'))) {
+    if (globalPermissionErrorHandler) {
+      globalPermissionErrorHandler(error);
+    }
+  }
+}
+
 export const FirebaseService = {
+  setPermissionErrorHandler(handler: (err: any) => void) {
+    globalPermissionErrorHandler = handler;
+  },
+
   // ----------------------------------------------------
   // System Settings
   // ----------------------------------------------------
@@ -90,6 +104,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to system settings:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -138,6 +153,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to users:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -186,6 +202,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to groups:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -199,6 +216,7 @@ export const FirebaseService = {
       return snapshot.docs.map((d) => d.data() as TargetPositionGroup);
     } catch (error) {
       console.error('Error fetching target position groups from Firebase:', error);
+      notifyIfPermissionError(error);
       return [];
     }
   },
@@ -210,6 +228,7 @@ export const FirebaseService = {
       await setDoc(docRef, cleanData, { merge: true });
     } catch (error) {
       console.error('Error saving target position group to Firebase:', error);
+      notifyIfPermissionError(error);
       throw error;
     }
   },
@@ -219,6 +238,7 @@ export const FirebaseService = {
       await deleteDoc(doc(db, TARGET_GROUPS_COLLECTION, groupId));
     } catch (error) {
       console.error('Error deleting target position group from Firebase:', error);
+      notifyIfPermissionError(error);
       throw error;
     }
   },
@@ -235,6 +255,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to target position groups:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -283,6 +304,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to templates:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -296,6 +318,7 @@ export const FirebaseService = {
       return snapshot.docs.map((d) => d.data() as EvaluationSubmission);
     } catch (error) {
       console.error('Error fetching submissions from Firebase:', error);
+      notifyIfPermissionError(error);
       return [];
     }
   },
@@ -307,6 +330,7 @@ export const FirebaseService = {
       await setDoc(docRef, cleanData, { merge: true });
     } catch (error) {
       console.error('Error saving submission to Firebase:', error);
+      notifyIfPermissionError(error);
       throw error;
     }
   },
@@ -316,6 +340,7 @@ export const FirebaseService = {
       await deleteDoc(doc(db, SUBMISSIONS_COLLECTION, submissionId));
     } catch (error) {
       console.error('Error deleting submission from Firebase:', error);
+      notifyIfPermissionError(error);
       throw error;
     }
   },
@@ -329,6 +354,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to submissions:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -349,6 +375,7 @@ export const FirebaseService = {
       return [];
     } catch (error) {
       console.error('Error fetching thresholds from Firebase:', error);
+      notifyIfPermissionError(error);
       return [];
     }
   },
@@ -360,6 +387,7 @@ export const FirebaseService = {
       await setDoc(docRef, cleanData);
     } catch (error) {
       console.error('Error saving thresholds to Firebase:', error);
+      notifyIfPermissionError(error);
     }
   },
 
@@ -377,6 +405,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to thresholds:', error);
+        notifyIfPermissionError(error);
       }
     );
   },
@@ -391,6 +420,7 @@ export const FirebaseService = {
       await setDoc(docRef, cleanData);
     } catch (error) {
       console.error('Error saving audit log to Firebase:', error);
+      notifyIfPermissionError(error);
     }
   },
 
@@ -400,6 +430,7 @@ export const FirebaseService = {
       return snapshot.docs.map((d) => d.data() as AuditLog);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
+      notifyIfPermissionError(error);
       return [];
     }
   },
@@ -414,6 +445,7 @@ export const FirebaseService = {
       },
       (error) => {
         console.error('Error listening to audit logs:', error);
+        notifyIfPermissionError(error);
       }
     );
   },

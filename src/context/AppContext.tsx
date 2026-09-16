@@ -198,6 +198,7 @@ interface AppContextType {
   // Firebase status
   isFirebaseSyncing: boolean;
   isFirebaseConnected: boolean;
+  firebasePermissionError: string | null;
   syncAllToFirebase: () => Promise<void>;
   refreshFromFirebase: () => Promise<void>;
   
@@ -279,13 +280,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (saved) {
       try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const validLogo = parsed.logoUrl && parsed.logoUrl.trim().length > 0
+          ? parsed.logoUrl
+          : CHAINAT_SCHOOL_LOGO;
+        return { ...DEFAULT_SETTINGS, ...parsed, logoUrl: validLogo };
       } catch (e) {
         // fallback
       }
     }
     return DEFAULT_SETTINGS;
   });
+
+  const [firebasePermissionError, setFirebasePermissionError] = useState<string | null>(null);
 
   // 2. Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -413,11 +420,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setIsFirebaseSyncing(true);
 
+        FirebaseService.setPermissionErrorHandler((err) => {
+          console.warn('Firebase permission-denied detected:', err);
+          setFirebasePermissionError('permission-denied');
+        });
+
         // Attach pure real-time listeners for all models across all devices (PC, Android, iOS)
         // Strictly READ-ONLY inside listeners to guarantee zero infinite write loops and optimal quota
         unsubSettings = FirebaseService.listenSystemSettings((remoteSettings) => {
           if (remoteSettings) {
-            setSystemSettings((prev) => ({ ...prev, ...remoteSettings }));
+            setSystemSettings((prev) => {
+              const validLogo = remoteSettings.logoUrl && remoteSettings.logoUrl.trim().length > 0
+                ? remoteSettings.logoUrl
+                : prev.logoUrl || CHAINAT_SCHOOL_LOGO;
+              return { ...prev, ...remoteSettings, logoUrl: validLogo };
+            });
+            // If we successfully received settings, clear any prior permission error
+            setFirebasePermissionError(null);
           }
         });
 
@@ -984,7 +1003,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSystemSettings = (newSettings: Partial<SystemSettings>) => {
     setSystemSettings((prev) => {
       const updated = { ...prev, ...newSettings };
-      FirebaseService.saveSystemSettings(updated).catch(console.error);
+      FirebaseService.saveSystemSettings(updated)
+        .then(() => setFirebasePermissionError(null))
+        .catch((err) => {
+          console.error('saveSystemSettings error:', err);
+          if (err?.code === 'permission-denied') {
+            setFirebasePermissionError('permission-denied');
+          }
+        });
       return updated;
     });
     logAudit('UPDATE_SYSTEM_SETTINGS', `แก้ไขการตั้งค่าระบบ: ชื่อแอพ/ชื่อโรงเรียน/โลโก้/โหมดทดสอบ`);
@@ -1095,6 +1121,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         aggregatedResults,
         isFirebaseSyncing,
         isFirebaseConnected,
+        firebasePermissionError,
         syncAllToFirebase,
         refreshFromFirebase,
         activeView,
