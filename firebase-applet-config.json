@@ -1,12 +1,12 @@
 {
-  "projectId": "midyear-mind-scbh2",
-  "appId": "1:472453817005:web:b16d1ff4996f11d35cdc24",
-  "apiKey": "AIzaSyCl4jqQhSoznDagT2o4TNj4_FLlAQkZ28E",
-  "authDomain": "midyear-mind-scbh2.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-remix-005a8848-48dd-43c1-96fb-75aee0afc0c3",
-  "storageBucket": "midyear-mind-scbh2.firebasestorage.app",
-  "messagingSenderId": "472453817005",
-  "measurementId": "",
-  "oAuthClientId": "472453817005-q73a2hjc8c16gp8fvod44su24negan31.apps.googleusercontent.com",
+  "projectId": "promote-cnsp",
+  "appId": "1:619835391960:web:c994f313a442852181bcad",
+  "apiKey": "AIzaSyC0ymubKZOnCmUMSscNg_nl4CwukF8kU5Q",
+  "authDomain": "promote-cnsp.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "promote-cnsp.firebasestorage.app",
+  "messagingSenderId": "619835391960",
+  "measurementId": "G-YJ16H4RNK4",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

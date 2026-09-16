@@ -858,8 +858,13 @@ export const SystemSettingsView: React.FC = () => {
                         await refreshFromFirebase();
                         setSyncSuccessMsg('ดึงข้อมูลล่าสุดจาก Firebase Cloud สำเร็จ ทุกอุปกรณ์อัปเดตตรงกัน');
                         setTimeout(() => setSyncSuccessMsg(''), 4000);
-                      } catch (e) {
-                        alert('เกิดข้อผิดพลาดในการดึงข้อมูลจาก Cloud');
+                      } catch (e: any) {
+                        const msg = e?.message || '';
+                        if (msg.includes('permission-denied') || msg.includes('API has not been used')) {
+                          alert('กรุณาเปิดใช้งาน Firestore Database ใน Firebase Console ครั้งแรก:\n1. ไปที่ https://console.firebase.google.com/project/promote-cnsp/firestore\n2. กด "Create database"\n3. เลือกโหมด Test Mode แล้วกดยืนยัน');
+                        } else {
+                          alert('เกิดข้อผิดพลาดในการดึงข้อมูลจาก Cloud: ' + (msg || 'โปรดตรวจสอบการเชื่อมต่อ'));
+                        }
                       } finally {
                         setIsSyncingManual(false);
                       }
@@ -886,8 +891,13 @@ export const SystemSettingsView: React.FC = () => {
                         await syncAllToFirebase();
                         setSyncSuccessMsg('สำรองและซิงค์ข้อมูลทั้งหมดขึ้น Cloud สำเร็จเรียบร้อย');
                         setTimeout(() => setSyncSuccessMsg(''), 4000);
-                      } catch (e) {
-                        alert('เกิดข้อผิดพลาดในการสำรองข้อมูลขึ้น Firebase');
+                      } catch (e: any) {
+                        const msg = e?.message || '';
+                        if (msg.includes('permission-denied') || msg.includes('API has not been used')) {
+                          alert('กรุณาเปิดใช้งาน Firestore Database ใน Firebase Console ครั้งแรก:\n1. ไปที่ https://console.firebase.google.com/project/promote-cnsp/firestore\n2. กด "Create database"\n3. เลือกโหมด Test Mode แล้วกดยืนยัน');
+                        } else {
+                          alert('เกิดข้อผิดพลาดในการสำรองข้อมูลขึ้น Firebase: ' + (msg || 'โปรดตรวจสอบการเชื่อมต่อ'));
+                        }
                       } finally {
                         setIsSyncingManual(false);
                       }

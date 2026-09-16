@@ -9,27 +9,47 @@ import {
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
-import firebaseConfig from '../../firebase-applet-config.json';
+import defaultFirebaseConfig from '../../firebase-applet-config.json';
 
-// Firebase Configuration from applet configuration
-export { firebaseConfig };
+// Safe access to Vite environment variables
+const env = typeof import.meta !== 'undefined' ? ((import.meta as any).env || {}) : {};
+
+// Firebase Configuration from applet configuration, with optional runtime VITE_ env overrides
+export const firebaseConfig = {
+  apiKey: env.VITE_FIREBASE_API_KEY || defaultFirebaseConfig.apiKey,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || defaultFirebaseConfig.authDomain,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || defaultFirebaseConfig.projectId,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || defaultFirebaseConfig.storageBucket,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || defaultFirebaseConfig.messagingSenderId,
+  appId: env.VITE_FIREBASE_APP_ID || defaultFirebaseConfig.appId,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || defaultFirebaseConfig.measurementId,
+  firestoreDatabaseId: env.VITE_FIREBASE_DATABASE_ID || defaultFirebaseConfig.firestoreDatabaseId || '(default)',
+};
 
 // Initialize Firebase App instance safely
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore with robust multi-tab and offline cache support across iOS, Android, and PC
 function initDb() {
+  const dbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+    ? firebaseConfig.firestoreDatabaseId
+    : undefined;
+
   if (typeof window !== 'undefined') {
     try {
-      return initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-      }, firebaseConfig.firestoreDatabaseId);
+      return dbId
+        ? initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+          }, dbId)
+        : initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+          });
     } catch (e) {
       console.warn('initializeFirestore fallback to getFirestore:', e);
-      return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+      return dbId ? getFirestore(app, dbId) : getFirestore(app);
     }
   }
-  return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  return dbId ? getFirestore(app, dbId) : getFirestore(app);
 }
 
 export const db = initDb();
